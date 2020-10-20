@@ -1,7 +1,7 @@
 """
-This script searches for a perturbation, which makes the network fail.
-The result will be saved in a Runner object. Make sure you have updated the 
-automap_config.py file before running this script.
+This script searches for a perturbation to simulate worst-case effect for the
+AUTOMAP network. The result will be saved in a Runner object. Make sure you
+have updated the automap_config.py file before running this script.
 """
 
 import tensorflow as tf;
@@ -88,7 +88,7 @@ runner = Automap_Runner(max_itr, max_r_norm, max_diff_norm,
 
 # Update the number of iteration you would like to run
 max_itr_schedule = [12, 4, 4, 4];
-#max_itr_schedule = [160, 10, 7, 6];
+# max_itr_schedule = [160, 10, 7, 6];
 
 for i in range(len(max_itr_schedule)):
     max_itr = max_itr_schedule[i];
@@ -127,4 +127,5 @@ for i in range(len(runner1.r)):
     
     Image_im_left.save(fname_out_noisy);
     Image_im_right.save(fname_out_noisy_rec);
+
 sess.close();

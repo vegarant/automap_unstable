@@ -16,7 +16,7 @@ from optimization.gpu.operators import MRIOperator
 from optimization.gpu.proximal import WeightedL1Prox, SQLassoProx2
 from optimization.gpu.algorithms import SquareRootLASSO
 from optimization.utils import estimate_sparsity, generate_weight_matrix
-from tfwavelets.dwtcoeffs import db2
+from tfwavelets.dwtcoeffs import get_wavelet
 from tfwavelets.nodes import idwt2d
 from PIL import Image
 
@@ -31,11 +31,16 @@ from adv_tools_PNAS.automap_tools import load_runner;
 runner_id_automap = 5;
 
 N = 128
-wav = db2
 wavname = 'db2'
 levels = 3
 use_gpu = True
-compute_node = 3
+compute_node = 2
+dtype = tf.float64;
+sdtype = 'float64';
+scdtype = 'complex128';
+cdtype = tf.complex128
+wav = get_wavelet(wavname, dtype=dtype);
+
 if use_gpu:
     os.environ["CUDA_VISIBLE_DEVICES"]= "%d" % (compute_node)
     print('Compute node: {}'.format(compute_node))
@@ -59,45 +64,42 @@ if not (os.path.isdir(dest_plots)):
     os.mkdir(dest_plots);
 
 
-# We take the scale as an argument. Attempting to feed it from the feed_dict fails
-def build_graph():
 
-    # Parameters for CS algorithm
-    pl_sigma = tf.compat.v1.placeholder(tf.float32, shape=(), name='sigma')
-    pl_tau   = tf.compat.v1.placeholder(tf.float32, shape=(), name='tau')
-    pl_lam   = tf.compat.v1.placeholder(tf.float32, shape=(), name='lambda')
+# Parameters for CS algorithm
+pl_sigma = tf.compat.v1.placeholder(dtype, shape=(), name='sigma')
+pl_tau   = tf.compat.v1.placeholder(dtype, shape=(), name='tau')
+pl_lam   = tf.compat.v1.placeholder(dtype, shape=(), name='lambda')
 
-    # Build Primal-dual graph
-    tf_im = tf.compat.v1.placeholder(tf.complex64, shape=[N,N,1], name='image')
-    tf_samp_patt = tf.compat.v1.placeholder(tf.bool, shape=[N,N,1], name='sampling_pattern')
+# Build Primal-dual graph
+tf_im = tf.compat.v1.placeholder(cdtype, shape=[N,N,1], name='image')
+tf_samp_patt = tf.compat.v1.placeholder(tf.bool, shape=[N,N,1], name='sampling_pattern')
 
-    # For the weighted l^1-norm
-    pl_weights = tf.compat.v1.placeholder(tf.float32, shape=[N,N,1], name='weights')
+# For the weighted l^1-norm
+pl_weights = tf.compat.v1.placeholder(dtype, shape=[N,N,1], name='weights')
 
-    tf_input = tf_im
+tf_input = tf_im
 
-    op = MRIOperator(tf_samp_patt, wav, levels)
-    measurements = op.sample(tf_input)
+op = MRIOperator(tf_samp_patt, wav, levels, dtype=dtype)
+measurements = op.sample(tf_input)
 
-    tf_adjoint_coeffs = op(measurements, adjoint=True)
-    adj_real_idwt = idwt2d(tf.math.real(tf_adjoint_coeffs), wav, levels)
-    adj_imag_idwt = idwt2d(tf.math.imag(tf_adjoint_coeffs), wav, levels)
-    tf_adjoint = tf.complex(adj_real_idwt, adj_imag_idwt)
+tf_adjoint_coeffs = op(measurements, adjoint=True)
+adj_real_idwt = idwt2d(tf.math.real(tf_adjoint_coeffs), wav, levels)
+adj_imag_idwt = idwt2d(tf.math.imag(tf_adjoint_coeffs), wav, levels)
+tf_adjoint = tf.complex(adj_real_idwt, adj_imag_idwt)
 
-    prox1 = WeightedL1Prox(pl_weights, pl_lam*pl_tau)
-    prox2 = SQLassoProx2()
+prox1 = WeightedL1Prox(pl_weights, pl_lam*pl_tau, dtype=dtype)
+prox2 = SQLassoProx2(dtype=dtype)
 
-    alg = SquareRootLASSO(op, prox1, prox2, measurements, sigma=pl_sigma, tau=pl_tau, lam=pl_lam)
+alg = SquareRootLASSO(op, prox1, prox2, measurements, sigma=pl_sigma, tau=pl_tau, lam=pl_lam, dtype=dtype)
 
-    initial_x = op(measurements, adjoint=True)
+initial_x = op(measurements, adjoint=True)
 
-    result_coeffs = alg.run(initial_x)
+result_coeffs = alg.run(initial_x)
 
-    real_idwt = idwt2d(tf.math.real(result_coeffs), wav, levels)
-    imag_idwt = idwt2d(tf.math.imag(result_coeffs), wav, levels)
-    result_image = tf.complex(real_idwt, imag_idwt)
+real_idwt = idwt2d(tf.math.real(result_coeffs), wav, levels)
+imag_idwt = idwt2d(tf.math.imag(result_coeffs), wav, levels)
+tf_recovery = tf.complex(real_idwt, imag_idwt)
 
-    return tf_input, result_image, tf_adjoint
 
 
 
@@ -107,7 +109,6 @@ tau = 0.6
 sigma = 0.6
 lam = 0.0001
 
-tf_input, tf_recovery, tf_adjoint =  build_graph()
 
 samp = np.fft.fftshift(np.array(h5py.File(join(src_data, 'k_mask.mat'), 'r')['k_mask']).astype(np.bool))
 
@@ -126,11 +127,7 @@ start = time.time()
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
     
-    #weights = generate_weight_matrix(mri.shape[0], estimate_sparsity(mri, wavname, levels), np.float32)
-    #weights = np.expand_dims(weights, -1)
-    weights = np.ones([128,128,1], dtype='float32');
-    #print('weights.shape: ', weights.shape);
-
+    weights = np.ones([128,128,1], dtype=sdtype);
 
     bd = 5;
     N = 128;
@@ -139,14 +136,10 @@ with tf.compat.v1.Session() as sess:
         if idx == 0:
             rr = np.zeros(rr.shape, dtype=rr.dtype);
 
-        #rr = np.expand_dims(rr, -1)
-
-        #print('rr.shape: ', rr.shape)
         noisy_image = mri_data + rr;
         noisy_image = noisy_image[im_nbr];
-        #noisy_image = np.expand_dims(noisy_image, 0)
         noisy_image = np.expand_dims(noisy_image, -1)
-        #print('noisy_image.shape: ', noisy_image.shape)
+        noisy_image = noisy_image.astype(scdtype);
 
         np_im_rec = sess.run(tf_recovery, feed_dict={'tau:0': tau,
                                                      'lambda:0': lam,

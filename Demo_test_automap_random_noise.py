@@ -1,3 +1,8 @@
+"""
+This script add random noise in two images, sample them and compute the AUTOMAP
+reconstruction. The resulting images are stored as png images.
+"""
+
 import tensorflow as tf;
 import scipy.io;
 import h5py
