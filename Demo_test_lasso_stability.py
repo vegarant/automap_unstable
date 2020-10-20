@@ -1,5 +1,6 @@
 """
-This script run the stablity test on the LASSO algorithm
+This script computes perturbations v_j, meanth to illustrate worst-case effect 
+for the LASSO method.
 """
 
 

@@ -1,6 +1,8 @@
 """
-This test the LASSO algorithm on the adversarial perturbation computed for the 
-AUTOMAP network.
+In this script we read the perturbations r_j (in image domain) computed to
+simulate worst-case effect for the AUTOMAP. We then sample A(x+r_j), where x,
+is the original image, and recover an approximation to x+r_j, using the LASSO
+method. 
 """
 
 import time
