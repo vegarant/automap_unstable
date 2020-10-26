@@ -27,7 +27,7 @@ from adv_tools_PNAS.automap_tools import load_runner
 
 dest_data = 'data_lasso';
 dest_plots = 'plots_lasso';
-count = 4;
+count = 5;
 dest_data_full = join(dest_data, f'c{count:03}');
 dest_plots_full = join(dest_plots, f'c{count:03}');
 
@@ -247,6 +247,7 @@ with tf.compat.v1.Session() as sess:
 
             if pert_nbr == len(norms) - 1:
                 i = max_num_noise_iter+1;
+                length = max_norm - 1;
             else:
                 pert_nbr += 1
             max_norm = norms[pert_nbr];
